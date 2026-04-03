@@ -16,10 +16,11 @@ class SimConfig:
         self.pairParticleForces = []
         self.dt = dt
         self.mass = 1.0
-        self.langevinGamma = 0.01
+        self.langevinGamma = 0.01/dt
         self.kbVal = kbVal
         self.forceCap = 1000000
-        self.allowVirtual = True 
+        self.allowVirtual = True
+        self.virtualPenaltyForceConst = 1000.0 #energetic penalty applied in terms of an additional force to virtual dimensions when allowVirtual = false
     def getSPF(self):
         return self.singleParticleForces
     def getPPF(self):
@@ -68,11 +69,12 @@ class HarmonicForce(SPF):
 
 
 class PPF:
-    def __init__(self,label,params,pairs):
+    def __init__(self,label,params,pairs,maskSize=-1):
         self.label=label
         self.params = params
         self.pairs = pairs
-        self.selfIntMask = np.eye( len(params[0][0] ) ,dtype=bool)
+        if maskSize > 0:
+            self.selfIntMask = np.eye( maskSize  ,dtype=bool)
 class LJ612(PPF):
     '''Params[0] contains the epsilon matrix, params[1] contains the sigma matrix'''
     def evaluate(self,positions):
@@ -90,7 +92,6 @@ class LJ612(PPF):
         forceTerms = 4.0 * ljMatrix *( 12.0 * invDistSq**7 * sigmaMatrix**12 * distSet  - 6.0 * invDistSq**4 * sigmaMatrix**6 * distSet )
         force = np.sum(forceTerms, axis=-2)
         return force
-
 
 class LJ612DH(PPF):
     '''Params[0] contains the epsilon matrix, params[1] contains the sigma matrix, params[2] contains the charge matrix, params[3] contains the DH screening constant '''
@@ -118,6 +119,71 @@ class LJ612DH(PPF):
         forceTerms += params[2] * chargeForceConstKBTNM* np.exp(-dhKappa * distMatrix) * distSet*(1 + distMatrix*dhKappa)/(     distSqMatrix**(1.5)   )
         force = np.sum(forceTerms, axis=-2)
         return force
+
+class HarmonicBondForce(PPF):
+    ''' params[0] contains the bond constants k , params[1] contains the ideal distance, pairs[0] is the set of atoms 1, pairs[1] is the set of atoms 2'''
+    def evaluate(self, positions):
+        params = self.params
+        force = np.zeros_like(positions)
+        atom1 = self.pairs[0]
+        atom2 = self.pairs[1]
+        numBonds = len(atom1)
+        numDims = len( positions[0] )
+        distSet = positions[atom1] - positions[atom2]
+        scalarDist = np.sqrt(  np.sum(distSet**2 ,axis=-1 ))
+        #debugAtom1 = np.argmax(scalarDist)
+        bondConst = params[0]
+        #print(scalarDist.shape )
+        #print(bondConst.shape)
+        #print(distSet.shape)
+        #print(params[1].shape)
+        forceMag = np.reshape( bondConst * (scalarDist - params[1] ) / ( scalarDist + 1e-10 ), (-1,1) )
+        forceTerms1 = - forceMag *distSet 
+        forceTerms2 = forceMag * distSet 
+        force[atom1] += forceTerms1
+        force[atom2] += forceTerms2
+        return force
+
+
+class HarmonicAngleForce(PPF):
+    ''' params[0] contains the bond constants k , params[1] contains the ideal angle in radians'''
+    def evaluate(self, positions):
+        force = np.zeros_like(positions)
+        atom1 = self.pairs[0]
+        atom2 = self.pairs[1]
+        atom3 = self.pairs[2]
+        bondConsts = self.params[0]
+        bondAngle0 = self.params[1]
+        bond1 = positions[ atom2] - positions[atom1]
+        bond2 = positions[atom2] - positions[atom3]
+        #print(bond1 * bond2)
+        bondEps = 1e-5 #minimum bond length to ensure numerical stability
+        bond1L = np.maximum( np.sqrt(   np.sum(bond1**2, axis=-1) ) , bondEps)
+        bond2L = np.maximum(np.sqrt(np.sum(bond2**2,axis=-1)) ,bondEps)
+        b1dotb2 = np.sum( bond1*bond2, axis=-1)
+        #print(b1dotb2)
+        #print(bond1L)
+        #print(bond2L)
+        
+        acosArg =  np.clip( b1dotb2/( bond1L*bond2L  ), -0.9999,0.9999 ) #numerically safe value 
+        #print(acosArg)
+        bondAngle = np.arccos( acosArg) #back-project the safe value to an equivalent 
+        #print(bondAngle)
+        prefactor = (bondAngle -bondAngle0 ) * bondConsts / np.sqrt( 1 - acosArg**2 )
+        prefactor = np.reshape( prefactor, (-1,1))
+        acosArg = np.reshape( acosArg, (-1,1) )
+        bond1L = np.reshape( bond1L, (-1,1))
+        bond2L = np.reshape(bond2L, (-1,1) )
+        forceTerms1 = prefactor*( acosArg * bond2L * bond1 - bond1L * bond2)/( bond1L**2 * bond2L)
+        forceTerms2 = prefactor* (- acosArg * bond1/(bond1L**2) + ( bond2 + bond1)/( bond1L * bond2L) - bond2*acosArg/(bond2L**2) )
+        forceTerms3 = prefactor * (   -1.0*bond2L * bond1 + acosArg * bond1L * bond2)/ (   bond1L * bond2L**2 )
+        force[atom1] += forceTerms1
+        force[atom2] += forceTerms2
+        force[atom3] += forceTerms3
+        return force
+
+    
+
 
 def getDistMatrix(positions):
         numParticles = len(positions)
@@ -148,6 +214,7 @@ def VerletStep( positions, velocities,forces,config):
 
 
 def GJFStep(positions, velocities, forces, config):
+    '''Langevin integration step from https://arxiv.org/pdf/1212.1244 '''
     noise = np.random.normal( 0.0, np.sqrt( 2.0 * config.langevinGamma * config.kbVal *  config.temp * config.dt ), positions.shape )
 
     if config.allowVirtual == False:
@@ -161,7 +228,8 @@ def GJFStep(positions, velocities, forces, config):
     #print( (positionsNew - positions)[:2] )
     forcesNew = getForces(positionsNew,config)
 
-    #if config.allowVirtual == False:
+    if config.allowVirtual == False:
+        forcesNew[:, config.realDims:] = -virtualPenaltyForceConst * positionsNew 
     #    forcesNew[:, config.realDims:] = np.where(   np.logical_and( positions[:, config.realDims: ]  > 0  ,forcesNew[:, config.realDims:] > 0 )  ,  0, forcesNew[:, config.realDims:] )
     #    forcesNew[:, config.realDims:] = np.where(   np.logical_and( positions[:, config.realDims: ]  < 0  ,forcesNew[:, config.realDims:] < 0 )  ,  0, forcesNew[:, config.realDims:] )
     
@@ -187,22 +255,24 @@ def writeXYZFrame(fileHandle, positions, labels, axes, offset=[0,0,0], scale=10)
     for i,atom in enumerate(positions):
         label = labels[i]
         fileHandle.write(label+" " +  str( scale* (offset[0]+atom[ axes[0] ] ))+" " + str(scale*  (offset[1]+atom[axes[1] ] )) + " " + str(scale* (offset[2] + atom[axes[2]])) + "\n" )
-         
+    fileHandle.flush()
 
 def runDemo():
     addVirtual = True
     numRealDim = 3
     numVirtDim = 1
-    if addVirtual == False:
-        numVirtDim = 0
-    numParticlesPerSide  = 10
+    if numVirtDim == 0:
+        addVirtual = False
+
+        
+    numParticlesPerSide  = 11
     numParticles = numParticlesPerSide**3
     beadSigma = 0.1
     dt = 1e-4
     temp = 1.0 #
     #realBoxLength = 2.1
 
-    realBoxLength = 1.0 * beadSigma *(numParticlesPerSide - 1.5 )
+    realBoxLength = 1.0 * beadSigma *(numParticlesPerSide - 1.0)
     virtualLengthScale = 2*beadSigma #RMS fluctuation size in the virtual dimension
     kbVal = 1.0
     config = SimConfig( numRealDim,numVirtDim, temp ,dt, kbVal)
@@ -218,12 +288,21 @@ def runDemo():
     xWall = WallForce("XWall", [0, realBoxLength/2.0] )
     yWall = WallForce("YWall", [1, realBoxLength/2.0] )
     zWall = WallForce("ZWall", [2, realBoxLength/2.0] )
-    alphaConstraint = HarmonicForce("AlphaSqueeze" , [3,virtualHarmonicConst] )
     config.addSPF(xWall)
     config.addSPF(yWall)
     config.addSPF(zWall)
-    if addVirtual == True:
-        config.addSPF(alphaConstraint)
+    
+    virtualConstraints = []
+    for i in range(numVirtDim):
+        virtualConstraints.append( HarmonicForce("VirSqueeze"+str(i) , [i+numRealDim, virtualHarmonicConst] ) )
+        config.addSPF( virtualConstraints[-1] ) 
+
+    addHarmonic = True
+    if addHarmonic == True:
+        atom1Set = np.arange( numParticles - numParticlesPerSide**2 )
+        atom2Set = atom1Set + numParticlesPerSide**2
+        bondForce = HarmonicBondForce( "HarmonicBondForce" ,  [200, 0.1 ] , [atom1Set,atom2Set] )
+        config.addPPF(bondForce)
     ljSigma = [beadSigma] * numParticles
     ljEps = [1.0] * numParticles
     ljEpsMatrix = np.sqrt( np.outer( ljEps, ljEps ) )
@@ -243,7 +322,7 @@ def runDemo():
                 atomLabels[i] = "B"
         print(atomLabels)
     ljSigmaMatrix = 0.5*np.add.outer( ljSigma, ljSigma)
-    ljForce = LJ612( "LJ612", [ ljEpsMatrix, ljSigmaMatrix ],"") 
+    ljForce = LJ612( "LJ612", [ ljEpsMatrix, ljSigmaMatrix ],"", maskSize = numParticles) 
     config.addPPF(ljForce)
 
     
@@ -258,8 +337,8 @@ def runDemo():
     if initVirtual == True:
         for i in range(  numVirtDim):
             velocities[:,i+numRealDim] = np.random.normal(0, np.sqrt(config.kbVal*temp/config.mass) , numParticles )        
-        for i in range(numVirtDim):
-            positions[:, i+numRealDim] = np.random.uniform( -virtualLengthScale, virtualLengthScale, numParticles )
+        #for i in range(numVirtDim):
+        #    positions[:, i+numRealDim] = np.random.uniform( -virtualLengthScale, virtualLengthScale, numParticles )
 
     cubicInitialise = True
     if cubicInitialise == True:
@@ -274,24 +353,15 @@ def runDemo():
             #print(p, xi,yi,zi, positions[p])
 
 
-    #positions[:,3] = 0
-    #velocities[:,3] = 0
-    #positions[0] = [0.0,0,0,0]
-    #positions[1] = [0,0,0.15,0]
-    
-    print(positions)
-    #then boltz initialise
-    #initialise a basic 4D MD run
-    #print( ljForce.evaluate( positions ) )
-    #print( getForces(positions, config) )
+
     forces = getForces(positions,config)
-    offsetVec = [1, 0, 0]
+    offsetVec = [numVirtDim*beadSigma *(numParticlesPerSide), 0, 0]
     if addVirtual == False:
-        xyzOut = open("coords_novirt_immisc0p1.xyz","w")
+        xyzOut = open("coords_novirt_bondimmisc0p1_d0.xyz","w")
         offsetVec =  [0,0,0]
     else:
-        xyzOut = open("coords_withvirt_immisc0p1.xyz","w")
-        xyaOut = open("coords_alpha_immisc0p1.xyz","w")
+        xyzOut = open("coords_withvirt_bondimmisc0p1_d"+str(numVirtDim)+".xyz","w")
+        xyaOut = open("coords_alpha_bondimmisc0p1_d"+str(numVirtDim)+".xyz","w")
     for i in range(50000):
         #positions,velocities,forces = VerletStep(positions, velocities,forces,config)
         if i == 40000:
