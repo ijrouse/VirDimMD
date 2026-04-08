@@ -8,7 +8,7 @@ I. Rouse 25/03/2026
 import numpy as np
 
 class SimConfig:
-    def __init__(self, realDims=3, virtDims=0, temp=1.0, dt=1e-5, kbVal = 1.0):
+    def __init__(self, realDims=3, virtDims=0, temp=1.0, dt=1e-5, kbVal = 1.0, periodicLengths = []):
         self.realDims = realDims
         self.virtDims = virtDims
         self.temp = temp
@@ -21,6 +21,7 @@ class SimConfig:
         self.forceCap = 1000000
         self.allowVirtual = True
         self.virtualPenaltyForceConst = 1000.0 #energetic penalty applied in terms of an additional force to virtual dimensions when allowVirtual = false
+        self.periodicLengths = periodicLengths
     def getSPF(self):
         return self.singleParticleForces
     def getPPF(self):
@@ -42,7 +43,7 @@ class SPF:
         self.params = newParams
         
 class WallForce(SPF):
-    def evaluate(self,positions):
+    def evaluate(self,positions, periodicLengths):
         force = np.zeros_like(positions)
         #print(positions)
         startLoc = self.params[1]
@@ -60,13 +61,22 @@ class WallForce(SPF):
         #print(force[0,axis])
         return force
 class HarmonicForce(SPF):
-    def evaluate(self,positions):
+    def evaluate(self,positions, periodicLengths):
         force = np.zeros_like(positions)
         forceConst = self.params[1]
         axis = self.params[0]
         force[:,axis] = -1.0 * forceConst * positions[:, axis]
         return force
 
+
+def periodicMask(distances, periodicLengths):
+    #print("distances: ", distances)
+    periodicLengthMask = periodicLengths < 1e-6
+    numBoxes = np.round( distances/periodicLengths )
+
+    numBoxes[..., periodicLengthMask] = 0 #zero out any that are non-periodic
+    #print("perioidic boxes: ", numBoxes)
+    return distances - numBoxes * periodicLengths
 
 class PPF:
     def __init__(self,label,params,pairs,maskSize=-1):
@@ -77,12 +87,14 @@ class PPF:
             self.selfIntMask = np.eye( maskSize  ,dtype=bool)
 class LJ612(PPF):
     '''Params[0] contains the epsilon matrix, params[1] contains the sigma matrix'''
-    def evaluate(self,positions):
+    def evaluate(self,positions, periodicLengths):
         params = self.params
         force = np.zeros_like(positions)
         numParticles = len(positions)
         numDims = len( positions[0] )
         distSet = -1.0*(np.reshape(positions, (1, numParticles, numDims) )  - np.reshape(positions, (numParticles,1,numDims) ) )
+      
+        distSet = periodicMask(distSet, periodicLengths)
 
         distSqMatrix = np.sum(distSet**2  , axis=-1)
         distSqMatrix[self.selfIntMask] = 100000.0 #to avoid nans during processing
@@ -95,12 +107,13 @@ class LJ612(PPF):
 
 class LJ612DH(PPF):
     '''Params[0] contains the epsilon matrix, params[1] contains the sigma matrix, params[2] contains the charge matrix, params[3] contains the DH screening constant '''
-    def evaluate(self,positions):
+    def evaluate(self,positions, periodicLengths):
         params = self.params
         force = np.zeros_like(positions)
         numParticles = len(positions)
         numDims = len( positions[0] )
         distSet = -1*(np.reshape(positions, (1, numParticles, numDims) )  - np.reshape(positions, (numParticles,1,numDims) ) )
+        distSet = periodicMask(distSet, periodicLengths)
         dhKappa = params[3]
         epsRel = 80.0
         '''
@@ -122,7 +135,7 @@ class LJ612DH(PPF):
 
 class HarmonicBondForce(PPF):
     ''' params[0] contains the bond constants k , params[1] contains the ideal distance, pairs[0] is the set of atoms 1, pairs[1] is the set of atoms 2'''
-    def evaluate(self, positions):
+    def evaluate(self, positions, periodicLengths):
         params = self.params
         force = np.zeros_like(positions)
         atom1 = self.pairs[0]
@@ -130,6 +143,7 @@ class HarmonicBondForce(PPF):
         numBonds = len(atom1)
         numDims = len( positions[0] )
         distSet = positions[atom1] - positions[atom2]
+        distSet = periodicMask(distSet, periodicLengths)
         scalarDist = np.sqrt(  np.sum(distSet**2 ,axis=-1 ))
         #debugAtom1 = np.argmax(scalarDist)
         bondConst = params[0]
@@ -147,15 +161,15 @@ class HarmonicBondForce(PPF):
 
 class HarmonicAngleForce(PPF):
     ''' params[0] contains the bond constants k , params[1] contains the ideal angle in radians'''
-    def evaluate(self, positions):
+    def evaluate(self, positions, periodicLengths):
         force = np.zeros_like(positions)
         atom1 = self.pairs[0]
         atom2 = self.pairs[1]
         atom3 = self.pairs[2]
         bondConsts = self.params[0]
         bondAngle0 = self.params[1]
-        bond1 = positions[ atom2] - positions[atom1]
-        bond2 = positions[atom2] - positions[atom3]
+        bond1 =periodicMask( positions[ atom2] - positions[atom1], periodicLengths)
+        bond2 =periodicMask( positions[atom2] - positions[atom3], periodicLengths)
         #print(bond1 * bond2)
         bondEps = 1e-5 #minimum bond length to ensure numerical stability
         bond1L = np.maximum( np.sqrt(   np.sum(bond1**2, axis=-1) ) , bondEps)
@@ -196,13 +210,14 @@ def getDistMatrix(positions):
 def getForces(positions,config):
     numAtoms = len(positions)
     forces = np.zeros_like(positions)
+    periodicLengths = config.periodicLengths
     #1-particle forces
     for spf in config.getSPF():
         #print(spf.label)
-        forces += spf.evaluate(positions)
+        forces += spf.evaluate(positions, periodicLengths)
     for ppf in config.getPPF():
         #print(ppf.label)
-        forces += ppf.evaluate(positions)
+        forces += ppf.evaluate(positions, periodicLengths)
     return np.clip( forces, -config.forceCap, config.forceCap )
 
 def VerletStep( positions, velocities,forces,config):
@@ -249,18 +264,22 @@ def calcRealTemp( velocities, config):
 def calcUnreality(positions, config):
     return np.sqrt( np.mean(   positions[:,  config.realDims:(config.realDims+config.virtDims)]**2, axis=0 ) )
 
-def writeXYZFrame(fileHandle, positions, labels, axes, offset=[0,0,0], scale=10):
+def writeXYZFrame(fileHandle, positions, labels, axes, offset=[0,0,0], scale=10, periodicLengths = [-1,-1,-1]):
     fileHandle.write(str(len(positions))+"\n")
     fileHandle.write("comment \n")
-    for i,atom in enumerate(positions):
+    positionsWrapped = periodicMask(positions, periodicLengths)
+    for i,atom in enumerate(positionsWrapped):
         label = labels[i]
-        fileHandle.write(label+" " +  str( scale* (offset[0]+atom[ axes[0] ] ))+" " + str(scale*  (offset[1]+atom[axes[1] ] )) + " " + str(scale* (offset[2] + atom[axes[2]])) + "\n" )
+        ap1 = scale* (offset[0]+atom[ axes[0] ]  )
+        ap2 = scale* (offset[1]+atom[ axes[1] ]  )
+        ap3 = scale* (offset[2]+atom[ axes[2] ]  )
+        fileHandle.write(label+" " +  str( ap1)+" " + str(ap2) + " " + str(ap3) + "\n" )
     fileHandle.flush()
 
 def runDemo():
     addVirtual = True
     numRealDim = 3
-    numVirtDim = 1
+    numVirtDim = 0
     if numVirtDim == 0:
         addVirtual = False
 
@@ -273,9 +292,16 @@ def runDemo():
     #realBoxLength = 2.1
 
     realBoxLength = 1.0 * beadSigma *(numParticlesPerSide - 1.0)
-    virtualLengthScale = 2*beadSigma #RMS fluctuation size in the virtual dimension
+    virtualLengthScale = beadSigma #RMS fluctuation size in the virtual dimension
+    usePBC = True
+    
+    if usePBC == True:
+        periodicLengths = np.array( ([ realBoxLength + beadSigma ] * numRealDim )+ ( [ -1] * numVirtDim ) )
+        print("Periodic box: ", periodicLengths)
+    else:
+        periodicLengths = np.array( ([ -1 ] * numRealDim )+ ( [ -1] * numVirtDim ) )
     kbVal = 1.0
-    config = SimConfig( numRealDim,numVirtDim, temp ,dt, kbVal)
+    config = SimConfig( numRealDim,numVirtDim, temp ,dt, kbVal, periodicLengths = periodicLengths)
     #harmonic oscillator: equipartition implies 1/2 k <x^2> =  1/2 kbT
     virtualHarmonicConst = config.kbVal * temp / ( virtualLengthScale**2 )  
     print("VHC from length scale: ", virtualHarmonicConst)
@@ -284,20 +310,20 @@ def runDemo():
     virtualHarmonicConst = 2*1.0 / (beadSigma ** 2)
     print("setting harmonic constant to", virtualHarmonicConst)
     
-    
-    xWall = WallForce("XWall", [0, realBoxLength/2.0] )
-    yWall = WallForce("YWall", [1, realBoxLength/2.0] )
-    zWall = WallForce("ZWall", [2, realBoxLength/2.0] )
-    config.addSPF(xWall)
-    config.addSPF(yWall)
-    config.addSPF(zWall)
+    if usePBC == False:
+        xWall = WallForce("XWall", [0, realBoxLength/2.0] )
+        yWall = WallForce("YWall", [1, realBoxLength/2.0] )
+        zWall = WallForce("ZWall", [2, realBoxLength/2.0] )
+        config.addSPF(xWall)
+        config.addSPF(yWall)
+        config.addSPF(zWall)
     
     virtualConstraints = []
     for i in range(numVirtDim):
         virtualConstraints.append( HarmonicForce("VirSqueeze"+str(i) , [i+numRealDim, virtualHarmonicConst] ) )
         config.addSPF( virtualConstraints[-1] ) 
 
-    addHarmonic = True
+    addHarmonic = False
     if addHarmonic == True:
         atom1Set = np.arange( numParticles - numParticlesPerSide**2 )
         atom2Set = atom1Set + numParticlesPerSide**2
@@ -357,11 +383,11 @@ def runDemo():
     forces = getForces(positions,config)
     offsetVec = [numVirtDim*beadSigma *(numParticlesPerSide), 0, 0]
     if addVirtual == False:
-        xyzOut = open("coords_novirt_bondimmisc0p1_d0.xyz","w")
+        xyzOut = open("coords_novirt_bondimmisc0p1_d0_pbc_walloff.xyz","w")
         offsetVec =  [0,0,0]
     else:
-        xyzOut = open("coords_withvirt_bondimmisc0p1_d"+str(numVirtDim)+".xyz","w")
-        xyaOut = open("coords_alpha_bondimmisc0p1_d"+str(numVirtDim)+".xyz","w")
+        xyzOut = open("coords_withvirt_bondimmisc0p1_d"+str(numVirtDim)+"_pbc_walloff.xyz","w")
+        xyaOut = open("coords_alpha_bondimmisc0p1_d"+str(numVirtDim)+"_pbc_walloff.xyz","w")
     for i in range(50000):
         #positions,velocities,forces = VerletStep(positions, velocities,forces,config)
         if i == 40000:
@@ -370,9 +396,9 @@ def runDemo():
         positions,velocities,forces = GJFStep(positions, velocities,forces,config)
         print(i, calcRealTemp(velocities, config) , calcUnreality(positions, config))
         if i % 100 == 0:
-            writeXYZFrame(xyzOut, positions, atomLabels, [0,1,2], offset=offsetVec)
+            writeXYZFrame(xyzOut, positions, atomLabels, [0,1,2], offset=offsetVec, periodicLengths = periodicLengths)
             if addVirtual == True:
-                writeXYZFrame(xyaOut, positions, atomLabels, [0,1,3],offset=offsetVec)
+                writeXYZFrame(xyaOut, positions, atomLabels, [0,1,3],offset=offsetVec, periodicLengths = periodicLengths)
         #distSet = getDistMatrix(positions)
         #minDist = np.amin ( distSet[ distSet > 1e-10 ] ) 
         #print( "current min dist: ", minDist )
