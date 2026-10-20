@@ -25,4 +25,6 @@ The final result is a system defined entirely in R^3 and which may then be used 
 Internally, a distinction is made between "real" and "virtual" dimensions. At present, the sole difference is that virtual dimensions can be squeezed out using an automated routine to attempt to decrease all virtual co-ordinates to zero.
 Note that this code is not intended to be highly optimised or for use in production simulations, but is instead intended to demonstrate the benefit of applying high-dimensional evolution during equilibriation of more standard MD simulations.
 
+A very basic version was previously implemented in Python, currently this is being rewritten to C++ using the Eigen library to simplify further development and allow multithreading at a future stage.
+
 The basic methodology of 4D MD has been shown to useful for protein folding and ligand binding simulations, but is only implemented in a small number of MD packages and limited to 3+1D, where the 4th dimension is confined harmonically. VirDimMD on the other hand is designed to work in arbitrary N+M D spaces and includes generalisations of many MD features to high-dimensional spaces 
