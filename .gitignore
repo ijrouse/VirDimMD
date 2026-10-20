@@ -1,0 +1,4 @@
+*.exe
+*.xyz
+C++/.vs/
+C++/vscode/

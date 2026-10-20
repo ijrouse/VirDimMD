@@ -1,0 +1,218 @@
+% !TEX TS-program = pdflatex
+% !TEX encoding = UTF-8 Unicode
+
+% This is a simple template for a LaTeX document using the "article" class.
+% See "book", "report", "letter" for other types of document.
+
+\documentclass[11pt]{article} % use larger type; default would be 10pt
+
+\usepackage[utf8]{inputenc} % set input encoding (not needed with XeLaTeX)
+
+%%% Examples of Article customizations
+% These packages are optional, depending whether you want the features they provide.
+% See the LaTeX Companion or other references for full information.
+
+%%% PAGE DIMENSIONS
+\usepackage{geometry} % to change the page dimensions
+\geometry{a4paper} % or letterpaper (US) or a5paper or....
+% \geometry{margin=2in} % for example, change the margins to 2 inches all round
+% \geometry{landscape} % set up the page for landscape
+%   read geometry.pdf for detailed page layout information
+
+\usepackage{graphicx} % support the \includegraphics command and options
+
+% \usepackage[parfill]{parskip} % Activate to begin paragraphs with an empty line rather than an indent
+
+%%% PACKAGES
+\usepackage{booktabs} % for much better looking tables
+\usepackage{array} % for better arrays (eg matrices) in maths
+\usepackage{paralist} % very flexible & customisable lists (eg. enumerate/itemize, etc.)
+\usepackage{verbatim} % adds environment for commenting out blocks of text & for better verbatim
+\usepackage{subfig} % make it possible to include more than one captioned figure/table in a single float
+% These packages are all incorporated in the memoir class to one degree or another...
+
+%%% HEADERS & FOOTERS
+\usepackage{fancyhdr} % This should be set AFTER setting up the page geometry
+\pagestyle{fancy} % options: empty , plain , fancy
+\renewcommand{\headrulewidth}{0pt} % customise the layout...
+\lhead{}\chead{}\rhead{}
+\lfoot{}\cfoot{\thepage}\rfoot{}
+
+%%% SECTION TITLE APPEARANCE
+\usepackage{sectsty}
+\allsectionsfont{\sffamily\mdseries\upshape} % (See the fntguide.pdf for font help)
+% (This matches ConTeXt defaults)
+
+%%% ToC (table of contents) APPEARANCE
+\usepackage[nottoc,notlof,notlot]{tocbibind} % Put the bibliography in the ToC
+\usepackage[titles,subfigure]{tocloft} % Alter the style of the Table of Contents
+\renewcommand{\cftsecfont}{\rmfamily\mdseries\upshape}
+\renewcommand{\cftsecpagefont}{\rmfamily\mdseries\upshape} % No bold!
+
+%%% END Article customizations
+
+%%% The "real" document content comes below...
+
+\title{Generalised Dihedral Angle}
+\author{I. Rouse}
+%\date{} % Activate to display a given date or no date (if empty),
+         % otherwise the current date is printed 
+
+\begin{document}
+\maketitle
+
+\section{First section}
+Given three successive bonds between four atoms in a chain, the dihedral angle is defined as the angle between the plane formed by atoms $1,2,3$ and $2,3,4$, or equivalently the planes defined by the bond vectors $u = 1,2 ; v = 2,3 ; w = 3,4$, i.e. the plane uv and vw. In $\mathcal{R}^3$, a relatively simple formula for this angle is given by,
+\begin{equation}
+\cos \phi = \frac{ (u \times v) \cdot (v \times w)}{| u \times v| | v \times w| } 
+\end{equation}
+
+\begin{equation}
+\sin \phi = \frac{ v \cdot  ( (u \times v) \times (v \times w) )}{ |v|  | u \times v| | v \times w| } 
+\end{equation}
+where $\times$ is the vector cross product. In practice, the atan2 function is typically used to evaluate the angle by combining the above two expressions to ensure the correct sign is returned. 
+
+In the above, the use of the vector cross product is used to produce a vector normal to each plane defined by pairs of bonds, since the angle between these vectors is equal to the angle between the planes. In dimensions other than 3, the vector cross product is not uniquely defined and so this definition cannot be directly extended to higher dimensional spaces. We thus must turn to the mathematical formalism of bivectors. Given two vectors $u,v$ we may consider the geometric product $uv$ as the non-commutative product of their expansions in terms of components $u_i$ and basis vectors $e_i$:
+\begin{equation}
+uv = ( u_1 e_1 + u_2 e_2 +  ....)  ( v_1 e_1 +v_2 e_2  ....) 
+\end{equation}
+\begin{equation}
+uv =u_1 e_1 v_1 e_1 + u_1 e_1 v_2 e_2  + u_2 e_2 v_1 e_1 + u_2 e_2 v_2 e_2  + ...
+\end{equation}
+The products of basis vectors $e_i e_j$ have the property that $e_i^2 = 1$ and otherwise $e_i e_j = - e_j e_i$, thus:
+\begin{equation}
+uv =u_1   v_1   + u_1 v_2 e_1  e_2  - u_2  v_1 e_1 e_2 + u_2  v_2   + ...
+\end{equation}
+and likewise
+\begin{equation}
+vu =u_1   v_1   - u_1 v_2 e_1  e_2  + u_2  v_1 e_1 e_2 + u_2  v_2   + ...
+\end{equation}
+The geometric product is associative, distributitive, and further has the property that $uu = u^2 = |u^2|$ is scalar valued for any u, as can be seen from the above.
+
+
+Let us first consider the symmetric combination, $uv + vu$:
+\begin{equation}
+uv + vu =u_1   v_1   + u_1 v_2 e_1  e_2  - u_2  v_1 e_1 e_2 + u_2  v_2   +.u_1   v_1   - u_1 v_2 e_1  e_2  + u_2  v_1 e_1 e_2 + u_2  v_2 + ...
+\end{equation}
+\begin{equation}
+uv + vu =2 u_1   v_1   + 2  u_2  v_2    +  ...
+\end{equation}
+which we may immediately see gives us the vector dot product,
+\begin{equation}
+u \cdot v = \frac{1}{2} ( uv + vu )
+\end{equation}
+
+We may instead consider the antisymmetric product, which we denote $u \wedge v$:
+\begin{equation}
+u \wedge v = \frac{1}{2} ( uv - vu )
+\end{equation}
+where for example 
+\begin{equation}
+uv - vu  =  u_1   v_1   + u_1 v_2 e_1  e_2  - u_2  v_1 e_1 e_2 + u_2  v_2   + ... -(   u_1   v_1   - u_1 v_2 e_1  e_2   +  u_2  v_1 e_1 e_2 + u_2  v_2  + ...)
+\end{equation}
+such that:
+\begin{equation}
+uv - vu  = 2 u_1 v_2 e_1  e_2  -2  u_2  v_1 e_1 e_2  + ...
+\end{equation}
+which is clearly not a regular vector or scalar, but instead represented in terms of products of vector components, and is a first example of a bivector. A  simple bivector $\mathbf{A}$ is defined as the exterior product between two standard vectors, $\mathbf{A} = u \wedge v = - v \wedge u$, and represents the directed area of the plane defined by $u,v$, with magnitude $| \mathbf{A} | = |u| |v| \sin \theta_{uv}$, where $\theta_{uv}$ is the angle between the two vectors.
+
+
+The geometric product of two bivectors can be expressed in the general form,
+\begin{equation}
+\mathbf{AB} = \mathbf{A} \cdot \mathbf {B} + \mathbf{A} \times \mathbf{B} + \mathbf{A} \wedge \mathbf{B} 
+\end{equation}
+where $\mathbf{A} \cdot \mathbf{B} = \frac{1}{2}(AB + BA) $ is the scalar-valued dot product, $ \mathbf{A} \times \mathbf{B}   = \frac{1}{2}(AB - BA)$ is a bivector-valued commutator product, and $\mathbf{A} \wedge \mathbf{B} $ is a 4-vector valued exterior product. In the cases considered here, the two bivectors share a component vector and so the 4-vector wedge term is expected to be always zero. 
+
+The relations $ - \mathbf{A} \cdot \mathbf{B} = |A| |B| \cos \theta$ and  $  | \mathbf{A} \times \mathbf{B}| = |A| |B| \sin \theta$ provide a means to extract the angle between the planes defined by $\mathbf{A}, \mathbf{B}$, analogously to the use of the vector cross product on $u,v,w$, but with the advantage that these directly extend to higher dimensional spaces.  Note the negative sign compared to the familiar result for the inner product of two vectors in cosine, and the use of the absolute value in the sine function. 
+
+In the particular case here, we define the bivectors $\mathbf{A} = u \wedge v, \mathbf{B} = v \wedge w, \mathbf{C} = u \wedge w$, and we are interested in the angle between bivectors $\mathbf{A}, \mathbf{B}$. We begin by writing down the geometric products for this pair,
+\begin{equation}
+\mathbf{A} \mathbf{B} = (u \wedge v) (v \wedge w) 
+\end{equation}
+Substituting in the definitions for the wedge product, we have:
+\begin{equation}
+\mathbf{A} \mathbf{B} = \frac{1}{4} (uv - vu) (vw - wv) 
+\end{equation}
+and expansion gives,
+\begin{equation}
+\mathbf{A} \mathbf{B} = \frac{1}{4}  (uvvw - vuvw - uvwv + vuwv)  
+\end{equation}
+To simplify this expression, we make use of the associative property of geometric products, $vuvw = (vu)(vw) = v(uv)w$, the property $vv = |v^2|$, and the relation $uv + vu = 2 u \cdot v \rightarrow uv = 2 u \cdot v - vu$  to convert the above four four-vector combinations into forms in which both $v$ components are neighbouring to allow these to be reduced to a scalar:
+
+\begin{equation}
+uvvw = |v^2| u w
+\end{equation}
+\begin{equation}
+vuvw = (2 u \cdot v - uv )  vw = 2 (u \cdot v)  vw  - |v^2| uw   
+\end{equation}
+\begin{equation}
+uvwv = uv( 2 v\cdot w - vw) =   2(  v\cdot w) uv - |v^2| u w
+\end{equation}
+\begin{equation}
+vuwv = (2 u \cdot v - uv)( 2 v \cdot w - vw) = 4 (u \cdot v ) ( v \cdot w) -2 (v \cdot w) uv - 2 ( u \cdot v) vw + |v^2| uw
+\end{equation}
+Such that finally: 
+
+\begin{equation}
+\mathbf{A} \mathbf{B} =  |v^2| uw +  (u \cdot v ) ( v \cdot w)   -  (v \cdot w) uv -  ( u \cdot v) vw 
+\end{equation}
+in which each component is now either a scalar or the geometric product of two vectors. 
+Repeating the same procedure with the product $\mathbf{BA}$:
+
+\begin{equation}
+\mathbf{B} \mathbf{A} = \frac{1}{4} (vwuv   - wvuv  - vwvu + wvvu      ) 
+\end{equation}
+
+\begin{equation}
+vwuv  = (2 v \cdot w - wv)(2 u \cdot v - vu) = 4 ( v \cdot w)(u \cdot v) - 2 (v \cdot w) vu - 2 (u \cdot v) wv + |v^2| wu
+\end{equation}
+\begin{equation}
+wvuv  = wv (2 u \cdot v - vu) = 2 (u \cdot v)wv  - |v^2| wu 
+\end{equation}
+\begin{equation}
+vwvu  = (2 v \cdot w - wv) vu = 2 (v \cdot w) vu - |v^2| wu
+\end{equation}
+\begin{equation}
+wvvu  =  |v^2| wu 
+\end{equation}
+
+
+\begin{equation}
+\mathbf{B} \mathbf{A} =    |v^2| wu +  (u \cdot v)( v \cdot w) -  (v \cdot w) vu -   (u \cdot v) wv     
+\end{equation}
+Unsurprisingly, this has the same general form as $\mathbf{AB}$ but the opposite order for the remaining vector products. In both cases, there is no 4-vector term as a result of the shared vector between $\mathbf{A}$ and $\mathbf{B}$. The scalar term is given by,
+\begin{equation}
+\mathbf{A} \cdot \mathbf{B} = 1/2 [ \mathbf{AB} + \mathbf{BA} ] 
+\end{equation}
+\begin{equation}
+\mathbf{A} \cdot \mathbf{B} = 1/2(  |v^2| (uw + wu) +2  (u \cdot v ) ( v \cdot w)   -  (v \cdot w) [uv+vu] -  ( u \cdot v) [vw+wv]       )
+\end{equation}
+and using the definition for the vector dot products we have,
+\begin{equation}
+\mathbf{A} \cdot \mathbf{B} =    |v^2| (u \cdot w  ) -  (u \cdot v ) ( v \cdot w)     
+\end{equation}
+
+For consistency we require that $\mathbf{A} \cdot \mathbf{B} = -|A| |B| \cos \phi$ , where $\phi$ is the required dihedral angle. Thus:
+\begin{equation}
+\cos \phi =- \frac{  |v^2| (u \cdot w  ) -  (u \cdot v ) ( v \cdot w)      }{ |u| |v| \sin \theta_{uv}   |v| |w| \sin \theta_{vw}  } 
+\end{equation}
+As a reminder, the 3D vector cross product between $u$ and $v$ has the same magnitude $|u| |v| \sin \theta_{uv}$ as the bivector generated by $u \wedge v$ and so this is equivalent to:
+\begin{equation}
+\cos \phi = - \frac{  |v^2| (u \cdot w  ) -  (u \cdot v ) ( v \cdot w)      }{| u \times v| |v \times w|  } 
+\end{equation}
+To confirm that the numerator is consistent with the standard form, we may use the Binet-Cauchy identity,
+\begin{equation}
+(a \times b) \cdot (c \times d) = (a \cdot c)(b \cdot d) - (a \cdot d)(b \cdot c)
+\end{equation}
+which in this case gives
+\begin{equation}
+(u \times v) \cdot (v \times w) = (u \cdot v)(v \cdot w) - (u \cdot w)|v^2| 
+\end{equation}
+which is clearly consistent with the above when the opposite sign convention for bivectors is accounted for. Thus, the $\cos \phi$ value derived from the bivector approach is directly equivalent to the standard expression in 3D, but is applicable to an arbitrary number of dimensions. We note further that computation of this expression can be achieved using standard vector libraries only and does not require a specific bivector library. 
+
+
+\begin{equation}
+\mathbf{A} \times \mathbf{B} = 1/2 [ \mathbf{AB} - \mathbf{BA} ]
+\end{equation}
+
+\end{document}
