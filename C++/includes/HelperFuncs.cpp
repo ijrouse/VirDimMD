@@ -14,6 +14,16 @@ Eigen::ArrayXXd periodicMask( Eigen::ArrayXXd &distSet, double boxLength, bool i
     return pbcDist; 
 }
 
+//periodic mask a single-dim array of size NP 
+Eigen::ArrayXd periodicMask1D( Eigen::ArrayXd &distSet, double boxLength, bool isPBC){
+    Eigen::ArrayXd pbcDist ;
+    if(boxLength < 0 || isPBC == false){
+        return distSet;
+    }
+    pbcDist =  distSet -  boxLength*  (distSet/boxLength).round();
+    return pbcDist; 
+}
+
 
 void initialiseGrid(int numParticles, int numRealDim, int numVirtDim, int numParticlesPerSide, double genGridBoxLength, Eigen::ArrayXXd&  pos){ 
     double beadRadius = genGridBoxLength/(2 * numParticlesPerSide);

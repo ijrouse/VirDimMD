@@ -38,7 +38,7 @@ int main()
     double beadSigma = 0.1; 
 
     int numRealDim = 3;
-    int numVirtDim = 0;
+    int numVirtDim = 1;
     int numTotDim = numRealDim + numVirtDim;
     int numParticlesPerSide = 6;
     int numParticles = pow(numParticlesPerSide, numRealDim);
@@ -130,8 +130,37 @@ int main()
        forceSet.back()->setMaxForceConst(maxSafeHarmonicConst(simconfig));
        //forceSet.push_back( new ForceVirtualPenalty(0.01, virtualForceConst/(0.1*0.1), j, storedPenalty)) ; //a particle held at 0.01 nm for 0.1 ps will have approx 50kj/mol penalty
     }
-    std::cout << "Initial virtual force restraint: " << virtualForceConst << "\n";
-    std::cout << "Estimated max safe value: " << maxSafeHarmonicConst(simconfig) << "\n";
+    //std::cout << "Initial virtual force restraint: " << virtualForceConst << "\n";
+    //std::cout << "Estimated max safe value: " << maxSafeHarmonicConst(simconfig) << "\n";
+
+
+    //bond some atoms together
+    //harmonic bond
+    int numHarmonicBonds = 2;
+    Eigen::ArrayXi bondAtom1Set(numHarmonicBonds);
+    Eigen::ArrayXi bondAtom2Set(numHarmonicBonds);
+    Eigen::ArrayXd bondLengths(numHarmonicBonds);
+    Eigen::ArrayXd bondConsts(numHarmonicBonds);
+    bondAtom1Set << 0, 1;
+    bondAtom2Set << 1, 2; 
+    bondLengths << 0.2, 0.2;
+    bondConsts << 5000.0, 5000.0;
+    forceSet.push_back( new ForceHarmonicBond(bondAtom1Set, bondAtom2Set, bondConsts, bondLengths)  );
+
+
+    //angle bond
+    int numAngleBonds = 1;
+    Eigen::ArrayXi abondAtom1Set(numAngleBonds);
+    Eigen::ArrayXi abondAtom2Set(numAngleBonds);
+    Eigen::ArrayXi abondAtom3Set(numAngleBonds);
+    Eigen::ArrayXd abondTheta(numAngleBonds); 
+    Eigen::ArrayXd abondConsts(numAngleBonds); 
+    abondAtom1Set << 0;
+    abondAtom2Set << 1;
+    abondAtom3Set << 2;
+    abondTheta << 1.55; //pi/2 = right angle = about 1.55
+    abondConsts << 500.0;
+    forceSet.push_back( new ForceHarmonicAngleBond(abondAtom1Set, abondAtom2Set, abondAtom3Set, abondConsts, abondTheta)  );
 
     //compute each force for the first time to get initial energies
     double potentialEnergy = 0.0;
@@ -160,15 +189,15 @@ int main()
         zeroCOM(simconfig, vel);
 
     bool mcOn = true;
-    int mcUpdateFreq = 50;
+    int mcUpdateFreq = 5000;
     int mcSwitchOn = 1000;
     //MonteCarloPressure MCBarostat( simconfig.numRealDim, 1.0);
-    std::vector<double> pressureSet{10.0,20.0,40.0};
+    std::vector<double> pressureSet{1.0,1.0,1.0};
     MonteCarloPressure MCBarostat( pressureSet);
     Eigen::ArrayXXd virialTensor( simconfig.ndim, simconfig.ndim);
     double particleVol = 4.0/3.0 * M_PI * pow( 0.1/2.0, 3.0);
-    rescaleToIdealGas(simconfig, pos, pressureSet,particleVol);
-    initialiseRandom( simconfig, pos);
+    //rescaleToIdealGas(simconfig, pos, pressureSet,particleVol);
+    //initialiseRandom( simconfig, pos);
     xyzOut.setPBC(simconfig.boxLengths[0], simconfig.boxLengths[1], simconfig.boxLengths[2] );
 
 std::cout <<" Initial minimisation \n";

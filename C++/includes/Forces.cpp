@@ -25,25 +25,67 @@ void Force::setUpdateOnReset(bool newVal){
 }
  
  
+ ForceHarmonicAngleBond::ForceHarmonicAngleBond(Eigen::ArrayXi atom1SetIn, Eigen::ArrayXi atom2SetIn,Eigen::ArrayXi atom3SetIn, Eigen::ArrayXd bondConstsIn, Eigen::ArrayXd bondThetaIn) : atom1Set(atom1SetIn), atom2Set(atom2SetIn), atom3Set(atom3SetIn), bondConstants(bondConstsIn), bondTheta(bondThetaIn) {
+        numBonds = bondConstsIn.rows() ;
+    }
+    Eigen::ArrayXXd ForceHarmonicAngleBond::computeForce(Config &simconfig, Eigen::ArrayXXd &pos)  {
+        Eigen::ArrayXXd forces(simconfig.numParticles, simconfig.ndim) ;
+        forces.fill(0.0);
+        Eigen::ArrayXd bond1DistMag(numBonds);
+        Eigen::ArrayXd bond2DistMag(numBonds);
+        Eigen::ArrayXd bondDot(numBonds);
+        Eigen::ArrayXXd bond1DistComponents = pos(atom2Set, Eigen::placeholders::all) - pos(atom1Set, Eigen::placeholders::all);
+        Eigen::ArrayXXd bond2DistComponents = pos(atom2Set, Eigen::placeholders::all) - pos(atom3Set, Eigen::placeholders::all);
+        bond1DistMag.fill(0.0);
+        bond2DistMag.fill(0.0);
+        bondDot.fill(0.0);
+        //to-do: replace with smaller vectorised
+        for(int j = 0; j<simconfig.ndim; j++){
+        
+            bond1DistMag +=  bond1DistComponents(Eigen::placeholders::all, j).pow(2);
+            bond2DistMag +=  bond2DistComponents(Eigen::placeholders::all, j).pow(2);
+            bondDot += bond1DistComponents(Eigen::placeholders::all, j)*bond2DistComponents(Eigen::placeholders::all, j);
+        }
+        bond1DistMag = bond1DistMag.sqrt();
+        bond2DistMag = bond2DistMag.sqrt();
+
+ 
+        Eigen::ArrayXd bondCosine = (bondDot/(1e-10 +  bond1DistMag*bond2DistMag)).cwiseMin(0.9999).cwiseMax(-0.9999) ; //clip to help ensure the angle is correctly bounded
+        Eigen::ArrayXd bondAngle = bondCosine.acos() ;
+        Eigen::ArrayXd forceMag =  bondConstants * (bondAngle - bondTheta) / (1e-5 + (1.0 - bondCosine.pow(2)).sqrt() ) ;
+ 
+        
+       Eigen::ArrayXXd force1Terms = ( bond1DistComponents.colwise() *  (bondCosine * bond2DistMag) - bond2DistComponents.colwise()*bond1DistMag).colwise() * (forceMag/(bond1DistMag.pow(2) * bond2DistMag));
+       Eigen::ArrayXXd force2Terms = ( bond2DistComponents.colwise() *  (bondCosine * bond1DistMag) - bond1DistComponents.colwise()*bond2DistMag).colwise()* (forceMag/(bond2DistMag.pow(2) * bond1DistMag));
+       forces(atom1Set, Eigen::placeholders::all) +=  force1Terms;
+       forces(atom2Set, Eigen::placeholders::all) +=  -1.0*(force1Terms + force2Terms) ; //this must be the -sum other forces to keep the COM fixed
+       forces(atom3Set, Eigen::placeholders::all) +=  force2Terms;
+       energy = 0.5 * (bondConstants * (bondAngle-bondTheta).pow(2) ).sum() ;
+       
+        return forces;
+    }
 
 
- ForceHarmonicBond::ForceHarmonicBond(Eigen::ArrayXd bondConstsIn) : bondConstants(bondConstsIn) {
+
+ ForceHarmonicBond::ForceHarmonicBond(Eigen::ArrayXi atom1SetIn, Eigen::ArrayXi atom2SetIn, Eigen::ArrayXd bondConstsIn, Eigen::ArrayXd bondLengthsIn) : atom1Set(atom1SetIn), atom2Set(atom2SetIn), bondConstants(bondConstsIn), bondLengths(bondLengthsIn) {
         numBonds = bondConstsIn.rows() ;
     }
     Eigen::ArrayXXd ForceHarmonicBond::computeForce(Config &simconfig, Eigen::ArrayXXd &pos)  {
         Eigen::ArrayXXd forces(simconfig.numParticles, simconfig.ndim) ;
         Eigen::ArrayXd bondDistMag(numBonds);
         Eigen::ArrayXXd bondDistComponents = pos(atom1Set, Eigen::placeholders::all) - pos(atom2Set, Eigen::placeholders::all);
+ 
         bondDistMag.fill(0.0);
         for(int j = 0; j<simconfig.ndim; j++){
             bondDistMag += bondDistComponents(Eigen::placeholders::all, j).pow(2);
         }
         bondDistMag = bondDistMag.sqrt();
+ 
         Eigen::ArrayXd forceMag =  bondConstants * (bondDistMag - bondLengths) / (1e-5 + bondDistMag) ;
-        for(int j =0; j<simconfig.ndim; j++){
-            forces(atom1Set,j) = - forceMag * bondDistComponents(Eigen::placeholders::all, j);
-            forces(atom2Set,j) =   forceMag * bondDistComponents(Eigen::placeholders::all, j);
-        }
+        forces(atom1Set,Eigen::placeholders::all) += -1.0 *  (bondDistComponents(Eigen::placeholders::all, Eigen::placeholders::all).colwise() * forceMag) ;
+        forces(atom2Set,Eigen::placeholders::all) +=  (bondDistComponents(Eigen::placeholders::all, Eigen::placeholders::all).colwise() * forceMag) ;
+ 
+        energy = 0.5 * (bondConstants *  ( bondDistMag - bondLengths).pow(2)).sum() ; 
         return forces;
     }
 

@@ -25,12 +25,25 @@ class ForceHarmonicBond : public Force{
     public:
     Eigen::ArrayXd bondConstants;
     Eigen::ArrayXd bondLengths;
-    Eigen::ArrayXd atom1Set;
-    Eigen::ArrayXd atom2Set;
+    Eigen::ArrayXi atom1Set;
+    Eigen::ArrayXi atom2Set;
     int numBonds;
-    ForceHarmonicBond(Eigen::ArrayXd bondConstsIn) ;
+    ForceHarmonicBond(Eigen::ArrayXi atom1SetIn, Eigen::ArrayXi atom2SetIn, Eigen::ArrayXd bondConstsIn, Eigen::ArrayXd bondLengthsIn) ;
     Eigen::ArrayXXd computeForce(Config &simconfig, Eigen::ArrayXXd &pos) override ;
 };
+
+class ForceHarmonicAngleBond : public Force{
+    public:
+    Eigen::ArrayXd bondConstants;
+    Eigen::ArrayXd bondTheta;
+    Eigen::ArrayXi atom1Set;
+    Eigen::ArrayXi atom2Set;
+    Eigen::ArrayXi atom3Set;
+    int numBonds;
+    ForceHarmonicAngleBond(Eigen::ArrayXi atom1SetIn, Eigen::ArrayXi atom2SetIn,Eigen::ArrayXi atom3SetIn, Eigen::ArrayXd bondConstsIn, Eigen::ArrayXd bondThetaIn) ;
+    Eigen::ArrayXXd computeForce(Config &simconfig, Eigen::ArrayXXd &pos) override ;
+};
+
 
 class ForceHarmonic : public Force{
     public:

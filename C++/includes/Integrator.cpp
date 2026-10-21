@@ -133,7 +133,7 @@ void MinimiseEnergy(Config &simconfig, Eigen::ArrayXXd &pos,
     double potentialEnergy = getPotentialEnergy(forceSet, simconfig, pos);
     double newPotentialEnergy = potentialEnergy;
     int minN = 0;
-    int maxSteps = 21;
+    int maxSteps = 101;
     double maxDelta = 0.005;
     Eigen::ArrayXXd posOld = pos;
     std::cout << "starting minimisation \n";

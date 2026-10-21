@@ -6,7 +6,7 @@
 
 //mask an NP x NP array along dimension J 
 Eigen::ArrayXXd periodicMask( Eigen::ArrayXXd &distSet, double boxLength, bool isPBC);
-
+Eigen::ArrayXd periodicMask1D( Eigen::ArrayXd &distSet, double boxLength, bool isPBC);
 
 void initialiseGrid(int numParticles, int numRealDim, int numVirtDim, int numParticlesPerSide, double genGridBoxLength, Eigen::ArrayXXd&  pos);
 
