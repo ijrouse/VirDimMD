@@ -27,6 +27,7 @@ void Force::setUpdateOnReset(bool newVal){
  
  ForceHarmonicAngleBond::ForceHarmonicAngleBond(Eigen::ArrayXi atom1SetIn, Eigen::ArrayXi atom2SetIn,Eigen::ArrayXi atom3SetIn, Eigen::ArrayXd bondConstsIn, Eigen::ArrayXd bondThetaIn) : atom1Set(atom1SetIn), atom2Set(atom2SetIn), atom3Set(atom3SetIn), bondConstants(bondConstsIn), bondTheta(bondThetaIn) {
         numBonds = bondConstsIn.rows() ;
+        forceLabel = "HarmonicAngleBond";
     }
     Eigen::ArrayXXd ForceHarmonicAngleBond::computeForce(Config &simconfig, Eigen::ArrayXXd &pos)  {
         Eigen::ArrayXXd forces(simconfig.numParticles, simconfig.ndim) ;
@@ -69,12 +70,16 @@ void Force::setUpdateOnReset(bool newVal){
 
  ForceHarmonicBond::ForceHarmonicBond(Eigen::ArrayXi atom1SetIn, Eigen::ArrayXi atom2SetIn, Eigen::ArrayXd bondConstsIn, Eigen::ArrayXd bondLengthsIn) : atom1Set(atom1SetIn), atom2Set(atom2SetIn), bondConstants(bondConstsIn), bondLengths(bondLengthsIn) {
         numBonds = bondConstsIn.rows() ;
+        forceLabel = "HarmonicBond";
     }
     Eigen::ArrayXXd ForceHarmonicBond::computeForce(Config &simconfig, Eigen::ArrayXXd &pos)  {
         Eigen::ArrayXXd forces(simconfig.numParticles, simconfig.ndim) ;
         Eigen::ArrayXd bondDistMag(numBonds);
+
+        //std::cout << "atom1set" << atom1Set << "\n";
+        //std::cout << "pos1" <<  pos(atom1Set, Eigen::placeholders::all) << "\n";
         Eigen::ArrayXXd bondDistComponents = pos(atom1Set, Eigen::placeholders::all) - pos(atom2Set, Eigen::placeholders::all);
- 
+        //std::cout << "bdc " << bondDistComponents << "\n";
         bondDistMag.fill(0.0);
         for(int j = 0; j<simconfig.ndim; j++){
             bondDistMag += bondDistComponents(Eigen::placeholders::all, j).pow(2);
@@ -82,6 +87,7 @@ void Force::setUpdateOnReset(bool newVal){
         bondDistMag = bondDistMag.sqrt();
  
         Eigen::ArrayXd forceMag =  bondConstants * (bondDistMag - bondLengths) / (1e-5 + bondDistMag) ;
+        //std::cout << "force mag" << forceMag << "\n";
         forces(atom1Set,Eigen::placeholders::all) += -1.0 *  (bondDistComponents(Eigen::placeholders::all, Eigen::placeholders::all).colwise() * forceMag) ;
         forces(atom2Set,Eigen::placeholders::all) +=  (bondDistComponents(Eigen::placeholders::all, Eigen::placeholders::all).colwise() * forceMag) ;
  
@@ -96,6 +102,7 @@ void Force::setUpdateOnReset(bool newVal){
      x0 = x0In;
      axis = axisIn;
      maxConst = harmonicConst * 8;
+     forceLabel = "HarmonicConstraint";
     }
     void ForceHarmonic::setMaxForceConst(double newMax){
         maxConst = newMax;
@@ -145,6 +152,7 @@ void Force::setUpdateOnReset(bool newVal){
     //pairDists = distComponentsIn;
     kappa = kappaIn;
     isVirialPotential = true;
+    forceLabel = "LJ612";
     Eigen::ArrayXXd virialTermsNew( numDim, numDim);
     virialTermsNew.fill(0.0);
     virialTerms = virialTermsNew;

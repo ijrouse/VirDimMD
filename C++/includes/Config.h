@@ -17,9 +17,10 @@ class Config{
     double temp = 300.0;
     int resetVelocityFreq = -1;
     double realityResetInterval = 0.5 ; //on average reset to reality once every <this> ps 
+    bool allowFirebreak = true;
+    bool firebreakRatio = 0.5;
     std::vector<double> boxLengths;
     std::vector<Atom> atoms;
-
     std::mt19937 gener;
     std::normal_distribution<double> unitNormalDist{0.0, 1.0};
     std::exponential_distribution<double> unitExpDist{1.0};
